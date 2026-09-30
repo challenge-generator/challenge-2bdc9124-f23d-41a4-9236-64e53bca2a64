@@ -1,0 +1,126 @@
+environment: development
+pipeline:
+  name: streaming-etl-pipeline
+  version: 1.0.0
+  description: Pipeline ETL en streaming para procesamiento de datos en tiempo real
+
+spark:
+  app_name: StreamingETL
+  master: local[*]
+  memory: 4g
+  cores: 2
+  checkpoint_dir: s3a://data-lake/checkpoints/
+  max_offsets_per_trigger: 10000
+  watermark_delay_threshold: 10 minutes
+  trigger_interval: 30 seconds
+
+kafka:
+  bootstrap_servers:
+    dev: localhost:9092
+    prod: kafka-prod-1:9092,kafka-prod-2:9092,kafka-prod-3:9092
+  consumer_group: etl-streaming-consumer
+  topics:
+    - raw_events
+    - user_activities
+    - sensor_data
+  security:
+    protocol: SSL
+    mechanism: PLAIN
+  offsets:
+    auto_reset: earliest
+    commit_interval_ms: 5000
+
+s3:
+  bucket: data-lake-raw
+  region: us-east-1
+  format: parquet
+  compression: snappy
+  partition_by:
+    - year
+    - month
+    - day
+    - hour
+  path_prefix: raw/
+  staging_path: staging/
+  output_path: processed/
+
+redshift:
+  host: redshift-dev.cluster-xyz.us-east-1.redshift.amazonaws.com
+  port: 5439
+  database: analytics
+  schema: public
+  user: awsuser
+  iam_role: arn:aws:iam::123456789012:role/RedshiftS3ReadWrite
+  table: streaming_events
+  distkey: event_timestamp
+  sortkey: event_date
+  max_batch_size: 10000
+  copy_options:
+    format: parquet
+    json: auto
+    acceptinvchars: as '_'
+    emptyasnull: true
+    blanksasnull: true
+
+quality:
+  enabled: true
+  quarantine_enabled: true
+  quarantine_path: s3a://data-lake/quarantine/
+  rules:
+    - name: null_check
+      column: event_id
+      check: is_not_null
+      action: quarantine
+      threshold: 0
+    - name: timestamp_valid
+      column: event_timestamp
+      check: is_valid_timestamp
+      action: quarantine
+      threshold: 0
+    - name: value_range
+      column: amount
+      check: range
+      min: 0
+      max: 1000000
+      action: quarantine
+      threshold: 0.05
+    - name: string_length
+      column: user_id
+      check: length
+      min: 1
+      max: 100
+      action: quarantine
+      threshold: 0
+  metrics:
+    record_count: true
+    null_percentage: true
+    duplicate_check: true
+    schema_compliance: true
+
+retry:
+  max_attempts: 3
+  backoff_multiplier: 2
+  initial_delay_seconds: 1
+  max_delay_seconds: 60
+  retry_on_errors:
+    - ConnectionError
+    - TimeoutError
+    - TransientError
+
+monitoring:
+  enable_metrics: true
+  metrics_backend: cloudwatch
+  log_level: INFO
+  alert_on_failure: true
+  alert_email: data-team@company.com
+  dashboard_url: https://console.aws.amazon.com/cloudwatch/dashboard
+
+airflow:
+  dag_schedule: 0 * * * *  # Cada hora
+  dag_timeout: 3600
+  max_active_runs: 1
+  catchup: false
+  concurrency: 4
+  pool: etl_pool
+  execution_timeout: 7200
+  depends_on_past: false

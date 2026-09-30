@@ -1,0 +1,42 @@
+[tool.poetry]
+name = "streaming-etl-pipeline"
+version = "0.1.0"
+description = "Pipeline ETL en streaming para procesamiento de datos en tiempo real"
+authors = ["Ingeniero de Datos"]
+license = "MIT"
+readme = "README.md"
+packages = [{include = "src"}]
+
+[tool.poetry.dependencies]
+python = "^3.13"
+pyspark = "3.5.0"
+apache-airflow = "2.9.0"
+confluent-kafka = "2.3.0"
+boto3 = "1.34.0"
+pydantic = "2.7.0"
+pyyaml = "6.0.1"
+pandas = "2.2.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "8.1.1"
+
+[tool.poetry.scripts]
+start-airflow = "airflow standalone"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v"
+
+# Configuración para PySpark
+[tool.pyspark]
+spark_version = "3.5.0"
+hadoop_version = "3"
+
+# Configuración para Airflow
+[tool.airflow]
+dags_folder = "dags"
+plugins_folder = "plugins"
